@@ -36,6 +36,7 @@ enum ClaudeLocalQuota {
             let source = history != nil ? "Claude Desktop" : "LimitBar"
             // These files do not prove that Desktop and Claude Code use the same account.
             usage.quotaSource = "Registro de \(source) · hace \(compactDuration(now.timeIntervalSince(at))) · cuenta sin verificar"
+            usage.observedAt = at
             return Snapshot(usage: usage, observedAt: at)
         }.max { $0.observedAt < $1.observedAt }
     }

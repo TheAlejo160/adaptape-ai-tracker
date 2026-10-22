@@ -58,6 +58,7 @@ struct UsageWindow: Identifiable, Equatable, Sendable {
     var detail: String?
     /// Window length in seconds (5 h = 18 000). Needed for pace and projection; nil hides them.
     var duration: TimeInterval?
+    var group: String?
 
     var remaining: Double { 1 - used }
 
@@ -118,6 +119,7 @@ struct ProviderUsage: Identifiable, Equatable, Sendable {
     let iconURL: URL?
     var plan: String?
     var models: [String] = []
+    var modelsSource: String?
     var recentModel: String?
     var windows: [UsageWindow] = []
     var local: LocalStats?
@@ -128,9 +130,7 @@ struct ProviderUsage: Identifiable, Equatable, Sendable {
     /// Last fetch error; the row keeps showing stale data alongside it.
     var error: String?
     var quotaSource: String?
-
-    /// Worst window drives the menu bar readout.
-    var peakUsage: Double? { windows.map(\.used).max() }
+    var observedAt: Date?
 
     var orderedWindows: [UsageWindow] {
         windows.enumerated().sorted {

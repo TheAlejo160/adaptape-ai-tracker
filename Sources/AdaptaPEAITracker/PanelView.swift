@@ -7,6 +7,7 @@ struct PanelView: View {
     @State private var contentHeight: CGFloat = 0
     @State private var isVisible = false
     @State private var showingAccounts = false
+    @State private var selectedTab = "quotas"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,7 +18,15 @@ struct PanelView: View {
                 VStack(spacing: 0) {
                     header
                     Divider()
-                    if store.providers.isEmpty && !store.isRefreshing {
+                    Picker("Vista", selection: $selectedTab) {
+                        Text("Cuotas").tag("quotas")
+                        Text("Gráficos").tag("history")
+                        Text("Planificar").tag("planning")
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    if selectedTab == "quotas" && store.providers.isEmpty && !store.isRefreshing {
                         emptyState
                     } else {
                         providerList
@@ -45,10 +54,21 @@ struct PanelView: View {
     private var providerList: some View {
         ScrollView {
             VStack(spacing: 8) {
-                ForEach(ProviderKind.allCases) { kind in
-                    let providers = store.providers(of: kind)
-                    if !providers.isEmpty {
-                        ProviderSection(kind: kind, providers: providers)
+                if selectedTab == "history" {
+                    if store.demoMode {
+                        ContentUnavailableView("Historial real oculto en modo demo", systemImage: "chart.xyaxis.line",
+                                               description: Text("Desactiva el modo demo para ver los registros de este Mac."))
+                    } else {
+                        HistoryView(samples: store.history, error: store.historyError)
+                    }
+                } else if selectedTab == "planning" {
+                    PlanningView(providers: store.providers)
+                } else {
+                    ForEach(ProviderKind.allCases) { kind in
+                        let providers = store.providers(of: kind)
+                        if !providers.isEmpty {
+                            ProviderSection(kind: kind, providers: providers)
+                        }
                     }
                 }
             }
@@ -79,6 +99,7 @@ struct PanelView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
+            BrandIcon()
             VStack(alignment: .leading, spacing: 2) {
                 Text("AdaptaPE AI Tracker").font(.headline)
                 TimelineView(.periodic(from: .now, by: 30)) { _ in

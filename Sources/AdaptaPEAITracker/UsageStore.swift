@@ -8,6 +8,10 @@ final class UsageStore {
     private(set) var providers: [ProviderUsage] = []
     private(set) var lastUpdated: Date?
     private(set) var isRefreshing = false
+    private(set) var history: [QuotaSample]
+    private(set) var historyError: String?
+    private var lastHistoryWrite: Date?
+    private var historyDirty = false
     /// Connectors that need opt-in (keychain, web login, API key) and the user turned on.
     private(set) var enabledIDs: Set<String>
 
@@ -31,7 +35,9 @@ final class UsageStore {
         static let demo = "demoMode"
     }
 
-    init() {
+    init(providers: [ProviderUsage] = []) {
+        self.providers = providers
+        history = QuotaHistory.load(from: QuotaHistory.fileURL, now: Date())
         enabledIDs = Set(UserDefaults.standard.stringArray(forKey: Keys.enabled) ?? [])
         demoMode = UserDefaults.standard.bool(forKey: Keys.demo)
     }
@@ -39,9 +45,6 @@ final class UsageStore {
     func providers(of kind: ProviderKind) -> [ProviderUsage] {
         providers.filter { $0.kind == kind }
     }
-
-    /// Highest used fraction across all quota windows, for the menu bar label.
-    var peakUsage: Double? { providers.compactMap(\.peakUsage).max() }
 
     /// Only Keychain-consent providers need opting in (macOS prompts). Everything else self-detects:
     /// fetch() returns nil when the local source or env var is absent, so the row simply stays hidden.
@@ -97,10 +100,34 @@ final class UsageStore {
             if started == generation {
                 providers = next
                 lastUpdated = Date()
+                if !demoMode { recordHistory(next) }
             } else {
                 refreshQueued = true
             }
         } while refreshQueued
+    }
+
+    private func recordHistory(_ providers: [ProviderUsage]) {
+        let now = Date()
+        let next = QuotaHistory.recording(providers, into: history, now: now)
+        if next != history {
+            history = next
+            historyDirty = true
+        }
+        guard lastHistoryWrite.map({ now.timeIntervalSince($0) >= 600 }) ?? true else { return }
+        flushHistory()
+    }
+
+    func flushHistory() {
+        guard historyDirty else { return }
+        do {
+            try QuotaHistory.save(history, to: QuotaHistory.fileURL)
+            lastHistoryWrite = Date()
+            historyDirty = false
+            historyError = nil
+        } catch {
+            historyError = "No se pudo guardar el historial en este Mac. Los datos actuales siguen visibles."
+        }
     }
 
     private func fetchAll() async -> [ProviderUsage] {

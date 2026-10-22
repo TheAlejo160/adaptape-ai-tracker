@@ -9,10 +9,10 @@ struct CodexConnector: UsageConnector {
 
     nonisolated func fetch() async throws -> ProviderUsage? {
         try await fetch(auth: LocalFiles.home(".codex/auth.json"), sessions: LocalFiles.home(".codex/sessions"),
-                        config: LocalFiles.home(".codex/config.toml"))
+                        config: LocalFiles.home(".codex/config.toml"), catalog: LocalFiles.home(".codex/models_cache.json"))
     }
 
-    func fetch(auth: URL, sessions: URL, config: URL) async throws -> ProviderUsage? {
+    func fetch(auth: URL, sessions: URL, config: URL, catalog: URL? = nil) async throws -> ProviderUsage? {
         guard FileManager.default.fileExists(atPath: auth.path) else { return nil }
         let files = LocalFiles.sessionFiles(in: sessions)
         var logNotBefore: Date?
@@ -44,6 +44,10 @@ struct CodexConnector: UsageConnector {
         usage.recentModel = files.first.flatMap { try? LocalFiles.tail($0.url) }.flatMap(LocalFiles.recentModel)
             ?? (try? LocalFiles.head(config)).flatMap(Self.configModel)
         let now = Date()
+        if let catalog, let logNotBefore {
+            usage.models = LocalModelCatalog.codex(at: catalog, now: now, notBefore: logNotBefore)
+            if !usage.models.isEmpty { usage.modelsSource = "Catálogo local de Codex · acceso del plan sin verificar" }
+        }
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         usage.sessions = files.filter { now.timeIntervalSince($0.modified) < LocalFiles.openSessionAge }.map {
@@ -64,6 +68,7 @@ struct CodexConnector: UsageConnector {
             newest = snapshot
         }
         guard var usage = newest?.usage, let at = newest?.recordedAt else { return nil }
+        usage.observedAt = at
         usage.error = "Cuota del registro local (\(at.formatted(date: .abbreviated, time: .shortened))); cuenta sin verificar"
         return usage
     }

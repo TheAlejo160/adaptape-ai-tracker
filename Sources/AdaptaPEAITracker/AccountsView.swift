@@ -19,6 +19,22 @@ struct AccountsView: View {
                             section(kind, connectors)
                         }
                     }
+                    DisclosureGroup("Permisos opcionales del Llavero") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("La detección es automática. Estos permisos permiten consultar la API como fuente adicional.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            ForEach(store.available.filter { $0.info.auth == .optionalKeychainConsent }, id: \.info.id) { connector in
+                                Toggle("API de \(connector.info.name)", isOn: Binding(
+                                    get: { store.enabledIDs.contains(connector.info.id) },
+                                    set: { store.setEnabled($0, id: connector.info.id) }
+                                ))
+                                .toggleStyle(.switch).controlSize(.small)
+                                .help("Autorizar la lectura del token existente; macOS puede pedir permiso")
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+                    .padding(8)
                 }
                 .padding(8)
                 .onGeometryChange(for: CGFloat.self, of: \.size.height) { contentHeight = $0 }
@@ -101,7 +117,7 @@ private struct AccountRow: View {
 
     @ViewBuilder private var trailing: some View {
         switch info.auth {
-        case .keychainConsent, .optionalKeychainConsent:
+        case .keychainConsent:
             Toggle("", isOn: Binding(
                 get: { store.enabledIDs.contains(info.id) },
                 set: { store.setEnabled($0, id: info.id) }
@@ -111,8 +127,10 @@ private struct AccountRow: View {
             .toggleStyle(.switch)
             .controlSize(.mini)
             .help("macOS pedirá permiso para leer el token del Llavero")
-        case .automatic where isDetected, .apiKeyEnv where isDetected:
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .automatic where isDetected, .apiKeyEnv where isDetected, .optionalKeychainConsent where isDetected:
+            let usage = store.providers.first { $0.id == info.id }
+            Image(systemName: usage?.error == nil ? "checkmark.circle.fill" : "exclamationmark.circle")
+                .foregroundStyle(usage?.error == nil ? .green : .orange)
                 .accessibilityHidden(true)
         default:
             EmptyView()
@@ -142,7 +160,7 @@ private struct AccountRow: View {
             }
             return store.enabledIDs.contains(info.id)
                 ? "\(usage?.quotaStatus ?? "Consultando cuota…") · «\(tool)»"
-                : "Activa para permitir el Llavero de «\(tool)»"
+                : (isDetected ? "Detectado automáticamente · \(usage?.quotaStatus ?? "sin cuota")" : "No encontrado en este Mac")
         case .apiKeyEnv(let variable):
             return isDetected ? "Detectado (variable \(variable))" : "Define la variable \(variable)"
         }

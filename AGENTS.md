@@ -21,6 +21,8 @@ este Mac. Textos de la interfaz en español.
 - `Connectors/CLI/AntigravityCLIQuota.swift`: consulta aislada y acotada de `agy /quota`; pasa por `QuotaCache` cada 5 min como máximo.
 - `Auth/KeychainStore.swift`: lectura de ítems ajenos con `SecItemCopyMatching`, `LAContext.interactionNotAllowed` y protección serializada/restaurada de interacción para el llavero clásico; interacción solo desde Cuentas.
 - `UsageStore.swift`: sondeo cada 120 s, coalescencia de refrescos, conserva datos si un conector lanza error.
+- `QuotaHistory.swift`, `HistoryView.swift`: historial propio de porcentajes solicitado por el usuario; 35 días, último dato por hora/IA/ventana, máximo 20.000 puntos y 8 MB, sin credenciales ni identidad de cuenta. No registrar demo ni mover fechas de caché/registros históricos.
+- `QuotaPlanning.swift`, `PlanningView.swift`: selección de IA para la barra, rotación 5 h/semanal y escenarios lineales de agentes; nunca sumar porcentajes de límites independientes ni presentar sesiones como agentes.
 - `Model.swift`, `ProviderRow.swift`, `UsageBar.swift`, `ActiveSession.swift`: modelo y UI.
 
 ## Compilar, probar, instalar

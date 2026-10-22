@@ -41,7 +41,7 @@ extension GeminiConnector {
                 }
                 let label = "\(name) · \(cadence)"
                 let window = UsageWindow(label: label, used: 1 - fraction,
-                    resetsAt: LocalFiles.date(bucket["resetTime"] ?? bucket["reset_time"]), duration: duration)
+                    resetsAt: LocalFiles.date(bucket["resetTime"] ?? bucket["reset_time"]), duration: duration, group: name)
                 if let index = usage.windows.firstIndex(where: { $0.label == label }) {
                     if window.used > usage.windows[index].used { usage.windows[index] = window }
                 } else {

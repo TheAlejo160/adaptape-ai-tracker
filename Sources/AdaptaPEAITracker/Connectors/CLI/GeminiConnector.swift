@@ -47,7 +47,7 @@ struct GeminiConnector: UsageConnector {
                 }
             } else {
                 guard FileManager.default.fileExists(atPath: credentials.path) else {
-                    throw ConnectorError.credentialsUnavailable(hint: "Activa el Llavero de «agy» en Cuentas (desactiva y activa si ya está habilitado) o inicia sesión con «gemini».")
+                    throw ConnectorError.credentialsUnavailable(hint: "Para leer la sesión de «agy», activa «API de Gemini» en Cuentas › Permisos opcionales del Llavero (desactiva y activa si ya está habilitado) o inicia sesión con «gemini».")
                 }
                 let data = try LocalFiles.head(credentials)
                 usage = try await QuotaCache.shared.usage(id: "gemini:\(data.hashValue)", minInterval: 300, cooldownID: "gemini") {

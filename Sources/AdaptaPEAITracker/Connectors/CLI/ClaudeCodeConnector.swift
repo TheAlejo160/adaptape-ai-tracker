@@ -33,7 +33,7 @@ struct ClaudeCodeConnector: UsageConnector {
         var usage: ProviderUsage
         do {
             guard let data else {
-                throw ConnectorError.credentialsUnavailable(hint: "Desactiva y activa Claude en Cuentas para autorizar su Llavero.")
+                throw ConnectorError.credentialsUnavailable(hint: "Activa «API de Claude» en Cuentas › Permisos opcionales del Llavero; si ya está activado, desactívalo y actívalo para autorizar de nuevo.")
             }
             let credentials = try LocalFiles.json(data)["claudeAiOauth"] as? [String: Any]
             plan = Self.plan(credentials)

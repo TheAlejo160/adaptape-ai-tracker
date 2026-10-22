@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UsageBar: View {
     let window: UsageWindow
+    var showsPace = true
 
     // Rounded, not truncated: 0.29 * 100 = 28.999… would show 28 % where the provider shows 29 %.
     private var percent: Int { Int((min(max(window.used, 0), 1) * 100).rounded()) }
@@ -39,7 +40,7 @@ struct UsageBar: View {
             }
             MeterBar(fraction: window.used, color: color, marker: window.elapsed(at: now))
             Text(footerParts(now: now).joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
-            if let warning = exhaustionText(now: now) {
+            if showsPace, let warning = exhaustionText(now: now) {
                 Text(warning).font(.caption2).foregroundStyle(.orange)
             }
         }

@@ -193,7 +193,8 @@ actor QuotaCache {
             return try stale(entry, because: error, retryAt: until, now: now)
         }
         do {
-            let fresh = try await fetch()
+            var fresh = try await fetch()
+            if fresh.observedAt == nil { fresh.observedAt = now }
             entries[id] = Entry(usage: fresh, fetchedAt: now)
             if let cooldownID {
                 defaults?.removeObject(forKey: "quotaRetry.\(cooldownID).until")

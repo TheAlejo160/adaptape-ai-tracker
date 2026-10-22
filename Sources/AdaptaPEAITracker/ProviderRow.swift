@@ -7,7 +7,7 @@ struct ProviderRow: View {
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var canExpand: Bool { !provider.sessions.isEmpty || !provider.models.isEmpty }
+    private var canExpand: Bool { provider.kind == .cloud || !provider.sessions.isEmpty || !provider.models.isEmpty }
     private var isRateLimited: Bool { if case .rateLimited = provider.activity { true } else { false } }
 
     var body: some View {
@@ -29,7 +29,7 @@ struct ProviderRow: View {
         VStack(alignment: .leading, spacing: 8) {
             header
             if let model = provider.recentModel {
-                Text("Modelo: \(modelName(model))").font(.caption).foregroundStyle(.secondary)
+                Text("Último modelo: \(modelName(model))").font(.caption).foregroundStyle(.secondary)
             }
             if let local = provider.local {
                 LocalStatsView(stats: local)
@@ -55,11 +55,19 @@ struct ProviderRow: View {
             if expanded && !provider.sessions.isEmpty {
                 sessions.transition(.opacity.combined(with: .move(edge: .top)))
             }
-            if expanded && !provider.models.isEmpty {
+            if expanded && provider.kind == .cloud {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Modelos").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Text(provider.models.map(modelName).joined(separator: " · ")).font(.caption)
+                    Text("Modelos informados").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(provider.models.isEmpty ? "La fuente no informa un catálogo de modelos de tu plan." : provider.models.map(modelName).joined(separator: " · ")).font(.caption)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let source = provider.modelsSource {
+                        Text(source).font(.caption).foregroundStyle(.secondary)
+                    }
+                    if !provider.modelGroups.isEmpty {
+                        Text("Grupos con cuota: " + provider.modelGroups.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
@@ -124,6 +132,9 @@ struct ProviderRow: View {
         if let plan = provider.plan { parts.append("plan \(plan)") }
         if let model = provider.recentModel { parts.append("modelo \(modelName(model))") }
         if expanded && !provider.models.isEmpty { parts.append("modelos: " + provider.models.map(modelName).joined(separator: ", ")) }
+        if expanded && provider.kind == .cloud && provider.models.isEmpty { parts.append("La fuente no informa un catálogo de modelos de tu plan") }
+        if expanded, let source = provider.modelsSource { parts.append(source) }
+        if expanded && !provider.modelGroups.isEmpty { parts.append("grupos con cuota: " + provider.modelGroups.joined(separator: ", ")) }
         parts.append(provider.activity.label)
         for window in provider.orderedWindows {
             parts.append("\(window.label), \(Int((window.used * 100).rounded())) por ciento usado")
