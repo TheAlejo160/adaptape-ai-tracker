@@ -5,3 +5,9 @@ build/
 .orchestra/
 *.xcodeproj/
 xcuserdata/
+
+# Third-party reference checkouts used while developing; not part of this project.
+GaugeZ-main/
+GaugeZ-main.zip
+limitbar-main/
+limitbar-main.zip

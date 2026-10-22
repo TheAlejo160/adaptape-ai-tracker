@@ -1,61 +1,73 @@
 import SwiftUI
 
-/// One provider. Collapsed: worst window (or local stats). Expanded: every window + active sessions.
+/// Quotas stay visible; disclosure is reserved for sessions and the model catalog.
 struct ProviderRow: View {
     let provider: ProviderUsage
     @State private var expanded = false
     @State private var hovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var canExpand: Bool { provider.windows.count > 1 || !provider.sessions.isEmpty }
+    private var canExpand: Bool { !provider.sessions.isEmpty || !provider.models.isEmpty }
     private var isRateLimited: Bool { if case .rateLimited = provider.activity { true } else { false } }
-    private var isOffline: Bool { provider.activity == .offline }
-
-    /// Worst first, so the collapsed bar stays put when the rest slide in below it.
-    private var shownWindows: [UsageWindow] {
-        let sorted = provider.windows.sorted { $0.used > $1.used }
-        return expanded ? sorted : Array(sorted.prefix(1))
-    }
 
     var body: some View {
-        Button {
-            if canExpand { expanded.toggle() }
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                header
-                if let local = provider.local {
-                    LocalStatsView(stats: local)
-                } else if let summary = provider.summary {
-                    Text(summary).font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                } else if provider.windows.isEmpty {
-                    Text("Sin datos").font(.caption).foregroundStyle(.tertiary)
-                }
-                if let error = provider.error {
-                    Label(error, systemImage: "exclamationmark.circle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .lineLimit(2)
-                }
-                ForEach(shownWindows) { window in
-                    UsageBar(window: window)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-                if expanded && !provider.sessions.isEmpty {
-                    sessions.transition(.opacity.combined(with: .move(edge: .top)))
-                }
+        Group {
+            if canExpand {
+                Button { expanded.toggle() } label: { content }
+                    .buttonStyle(.plain)
+            } else {
+                content
             }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(background, in: .rect(cornerRadius: 8))
-            .contentShape(.rect(cornerRadius: 8))
-            .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: expanded)
         }
-        .buttonStyle(.plain)
-        .opacity(isOffline ? 0.5 : 1)
         .onHover { hovering = canExpand && $0 }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
         .accessibilityHint(canExpand ? (expanded ? "Contraer detalles" : "Mostrar detalles") : "")
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            if let model = provider.recentModel {
+                Text("Modelo: \(modelName(model))").font(.caption).foregroundStyle(.secondary)
+            }
+            if let local = provider.local {
+                LocalStatsView(stats: local)
+            } else if let summary = provider.summary {
+                Text(summary).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+            } else if provider.windows.isEmpty && provider.error == nil {
+                Text("Sin datos").font(.caption).foregroundStyle(.tertiary)
+            }
+            if let error = provider.error {
+                Label(error, systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let source = provider.quotaSource {
+                Text(source).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(provider.orderedWindows) { window in
+                UsageBar(window: window)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            if expanded && !provider.sessions.isEmpty {
+                sessions.transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            if expanded && !provider.models.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Modelos").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(provider.models.map(modelName).joined(separator: " · ")).font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(background, in: .rect(cornerRadius: 8))
+        .contentShape(.rect(cornerRadius: 8))
+        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: expanded)
     }
 
     private var header: some View {
@@ -110,10 +122,15 @@ struct ProviderRow: View {
     private var accessibilityText: String {
         var parts = [provider.name]
         if let plan = provider.plan { parts.append("plan \(plan)") }
+        if let model = provider.recentModel { parts.append("modelo \(modelName(model))") }
+        if expanded && !provider.models.isEmpty { parts.append("modelos: " + provider.models.map(modelName).joined(separator: ", ")) }
         parts.append(provider.activity.label)
-        if let peak = provider.peakUsage { parts.append("uso máximo \(Int((peak * 100).rounded())) por ciento") }
+        for window in provider.orderedWindows {
+            parts.append("\(window.label), \(Int((window.used * 100).rounded())) por ciento usado")
+        }
         if let summary = provider.summary { parts.append(summary) }
         if let error = provider.error { parts.append("error: \(error)") }
+        if let source = provider.quotaSource { parts.append(source) }
         // The custom label replaces children's labels, so details must be spelled out here.
         if let local = provider.local {
             parts.append("VRAM \(local.vramUsedGB.formatted(.number.precision(.fractionLength(1)))) de \(local.vramTotalGB.formatted()) gigabytes")

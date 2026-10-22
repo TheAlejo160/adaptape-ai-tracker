@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// Read-only account panel: shows how each provider is detected. Nothing is stored or typed here —
-/// the app only reads credentials other tools already saved. The one control is the macOS-consent
-/// toggle for providers whose token lives in another app's Keychain.
+/// Connection status and consent to direct Keychain reads.
 struct AccountsView: View {
     let onClose: () -> Void
     @Environment(UsageStore.self) private var store
@@ -53,7 +51,7 @@ struct AccountsView: View {
                 .toggleStyle(.switch)
                 .controlSize(.mini)
                 .font(.callout)
-            Label("No se guarda ninguna credencial: la app solo lee los tokens que tus herramientas ya tienen en este Mac, los usa en memoria y los envía solo a cada proveedor. En disco guarda solo tus preferencias y la caché de iconos.",
+            Label("El tracker no guarda credenciales. «agy /quota» gestiona su propia sesión. Solo guardamos preferencias, iconos y la espera entre consultas.",
                   systemImage: "lock.fill")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -103,12 +101,13 @@ private struct AccountRow: View {
 
     @ViewBuilder private var trailing: some View {
         switch info.auth {
-        case .keychainConsent:
+        case .keychainConsent, .optionalKeychainConsent:
             Toggle("", isOn: Binding(
-                get: { store.isEnabled(info) },
+                get: { store.enabledIDs.contains(info.id) },
                 set: { store.setEnabled($0, id: info.id) }
             ))
             .labelsHidden()
+            .accessibilityLabel("Permitir lectura del Llavero de \(info.name)")
             .toggleStyle(.switch)
             .controlSize(.mini)
             .help("macOS pedirá permiso para leer el token del Llavero")
@@ -132,10 +131,18 @@ private struct AccountRow: View {
         switch info.auth {
         case .automatic:
             return isDetected ? "Detectado automáticamente" : "No encontrado en este Mac"
-        case .keychainConsent:
-            return store.isEnabled(info)
-                ? (isDetected ? "Conectado (token del Llavero)" : "Activado; esperando permiso del Llavero")
-                : "Activa para leer el token del Llavero"
+        case .keychainConsent, .optionalKeychainConsent:
+            let tool = info.id == "gemini" ? "agy" : "claude"
+            let usage = store.providers.first { $0.id == info.id }
+            if info.id == "gemini", usage?.quotaSource == "Cuota de «agy /quota»" {
+                return "\(usage?.quotaStatus ?? "Consultando cuota…") · «agy /quota»"
+            }
+            if info.id == "claude", !store.enabledIDs.contains(info.id), usage?.windows.isEmpty == false {
+                return "\(usage?.quotaStatus ?? "Cuota recibida") · registro local"
+            }
+            return store.enabledIDs.contains(info.id)
+                ? "\(usage?.quotaStatus ?? "Consultando cuota…") · «\(tool)»"
+                : "Activa para permitir el Llavero de «\(tool)»"
         case .apiKeyEnv(let variable):
             return isDetected ? "Detectado (variable \(variable))" : "Define la variable \(variable)"
         }

@@ -5,6 +5,7 @@ let package = Package(
     name: "AdaptaPEAITracker",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "AdaptaPEAITracker", path: "Sources/AdaptaPEAITracker")
+        .executableTarget(name: "AdaptaPEAITracker", path: "Sources/AdaptaPEAITracker"),
+        .testTarget(name: "AdaptaPEAITrackerTests", dependencies: ["AdaptaPEAITracker"])
     ]
 )

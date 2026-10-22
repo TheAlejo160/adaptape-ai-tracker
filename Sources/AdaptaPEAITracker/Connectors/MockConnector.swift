@@ -24,24 +24,29 @@ struct MockConnector: UsageConnector {
         return [
             ProviderUsage(
                 id: "demo-claude", name: "Claude", kind: .cloud, iconURL: icon("claude"), plan: "Max",
+                recentModel: "claude-opus-4-6",
                 windows: [
-                    UsageWindow(label: "Sesión (5 h)", used: 0.42, resetsAt: h(2.3)),
-                    UsageWindow(label: "Semanal", used: 0.67, resetsAt: h(76)),
+                    UsageWindow(label: "Sesión (5 h)", used: 0.42, resetsAt: h(2.3), duration: 18_000),
+                    UsageWindow(label: "Semanal", used: 0.67, resetsAt: h(76), duration: 604_800),
                 ],
                 activity: .processing(task: "Respondiendo"),
                 sessions: [ActiveSessionInfo(id: "c1", title: "Refactor del widget", startedAt: h(-0.4))]
             ),
             ProviderUsage(
                 id: "demo-chatgpt", name: "ChatGPT", kind: .cloud, iconURL: icon("openai"), plan: "Plus",
+                recentModel: "gpt-6.1-sol",
                 windows: [
-                    UsageWindow(label: "Sesión (5 h)", used: 0.91, resetsAt: h(0.6)),
-                    UsageWindow(label: "Semanal", used: 0.38, resetsAt: h(120)),
+                    UsageWindow(label: "Sesión (5 h)", used: 0.91, resetsAt: h(0.6), duration: 18_000),
+                    UsageWindow(label: "Semanal", used: 0.38, resetsAt: h(120), duration: 604_800),
                 ]
             ),
             ProviderUsage(
                 id: "demo-gemini", name: "Gemini", kind: .cloud, iconURL: ProviderInfo.simpleIcon("googlegemini"), plan: "Pro",
-                windows: [UsageWindow(label: "Diario", used: 1, resetsAt: h(5))],
-                activity: .rateLimited(until: h(5))
+                models: ["gemini-3.8-flash", "gemini-3.6-flash"], recentModel: "gemini-3.8-flash",
+                windows: [UsageWindow(label: "Gemini 3.8 Flash", used: 1, resetsAt: h(5), duration: 86_400),
+                          UsageWindow(label: "Gemini 3.6 Flash", used: 0.2, resetsAt: h(5), duration: 86_400)],
+                activity: .rateLimited(until: h(5)),
+                sessions: [ActiveSessionInfo(id: "g1", title: "Antigravity · Proyecto de ejemplo", startedAt: h(-0.2))]
             ),
             ProviderUsage(
                 id: "demo-perplexity", name: "Perplexity", kind: .cloud, iconURL: icon("perplexity"),
@@ -49,7 +54,7 @@ struct MockConnector: UsageConnector {
             ),
             ProviderUsage(
                 id: "demo-claude-code", name: "Claude Code", kind: .codeAssistant, iconURL: icon("claudecode"),
-                windows: [UsageWindow(label: "Sesión (5 h)", used: 0.55, resetsAt: h(1.8))],
+                windows: [UsageWindow(label: "Sesión (5 h)", used: 0.55, resetsAt: h(1.8), duration: 18_000)],
                 activity: .processing(task: "Generando componente SwiftUI"),
                 sessions: [
                     ActiveSessionInfo(id: "cc1", title: "adaptape-tracker · Fase 3", startedAt: h(-1.2)),

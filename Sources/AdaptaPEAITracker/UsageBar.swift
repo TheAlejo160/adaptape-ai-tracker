@@ -3,7 +3,10 @@ import SwiftUI
 struct UsageBar: View {
     let window: UsageWindow
 
-    private var percent: Int { Int(min(max(window.used, 0), 1) * 100) }
+    // Rounded, not truncated: 0.29 * 100 = 28.999… would show 28 % where the provider shows 29 %.
+    private var percent: Int { Int((min(max(window.used, 0), 1) * 100).rounded()) }
+
+    private var remainingPercent: Int { 100 - percent }
 
     private var color: Color {
         switch window.severity {
@@ -31,11 +34,13 @@ struct UsageBar: View {
                 if window.severity == .critical {
                     Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.red)
                 }
-                Text("\(percent)%").font(.caption.weight(.semibold)).monospacedDigit()
+                Text("\(percent) %").font(.caption.weight(.semibold)).monospacedDigit()
+                    + Text(" usado").font(.caption).foregroundStyle(.secondary)
             }
-            MeterBar(fraction: window.used, color: color)
-            if let resetsAt = window.resetsAt {
-                Text(resetText(resetsAt, now: now)).font(.caption2).foregroundStyle(.tertiary)
+            MeterBar(fraction: window.used, color: color, marker: window.elapsed(at: now))
+            Text(footerParts(now: now).joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
+            if let warning = exhaustionText(now: now) {
+                Text(warning).font(.caption2).foregroundStyle(.orange)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -43,10 +48,23 @@ struct UsageBar: View {
         .accessibilityValue(accessibilityValue(now: now))
     }
 
+    private func footerParts(now: Date) -> [String] {
+        var parts = ["Quedan \(remainingPercent) %"]
+        if let resetsAt = window.resetsAt { parts.append(resetText(resetsAt, now: now)) }
+        return parts
+    }
+
+    private func exhaustionText(now: Date) -> String? {
+        window.exhaustion(at: now).map { "Al ritmo actual se agota en \(compactDuration($0.timeIntervalSince(now)))" }
+    }
+
     private func accessibilityValue(now: Date) -> String {
-        let used = "\(percent) por ciento usado"
-        guard let resetsAt = window.resetsAt else { return used }
-        return resetsAt > now ? "\(used), se reinicia en \(compactDuration(resetsAt.timeIntervalSince(now)))" : "\(used), reiniciando"
+        var value = "\(percent) por ciento usado, quedan \(remainingPercent) por ciento"
+        if let resetsAt = window.resetsAt {
+            value += resetsAt > now ? ", se reinicia en \(compactDuration(resetsAt.timeIntervalSince(now)))" : ", reiniciando"
+        }
+        if let warning = exhaustionText(now: now) { value += ", \(warning.lowercased())" }
+        return value
     }
 
     private func resetText(_ date: Date, now: Date) -> String {
@@ -58,6 +76,8 @@ struct UsageBar: View {
 struct MeterBar: View {
     let fraction: Double
     let color: Color
+    /// Optional 0…1 tick, e.g. fraction of the window elapsed.
+    var marker: Double?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -69,10 +89,17 @@ struct MeterBar: View {
                     Capsule()
                         .fill(color)
                         .frame(width: proxy.size.width * min(max(fraction, 0), 1))
+                    if let marker {
+                        Rectangle()
+                            .fill(.primary.opacity(0.5))
+                            .frame(width: 1.5)
+                            .offset(x: proxy.size.width * min(max(marker, 0), 1) - 0.75)
+                    }
                 }
             }
             .animation(reduceMotion ? nil : .spring(duration: 0.5, bounce: 0.1), value: fraction)
             .animation(reduceMotion ? nil : .spring(duration: 0.5, bounce: 0.1), value: color)
+            .animation(reduceMotion ? nil : .spring(duration: 0.5, bounce: 0.1), value: marker)
     }
 }
 

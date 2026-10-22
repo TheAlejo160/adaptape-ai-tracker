@@ -53,7 +53,14 @@ final class UsageStore {
         if enabled { enabledIDs.insert(id) } else { enabledIDs.remove(id) }
         UserDefaults.standard.set(Array(enabledIDs), forKey: Keys.enabled)
         if !enabled { providers.removeAll { $0.id == id } }
-        configChanged()
+        if enabled {
+            Task {
+                await Task.detached(priority: .userInitiated) { KeychainStore.requestAccess(providerID: id) }.value
+                configChanged()
+            }
+        } else {
+            configChanged()
+        }
     }
 
     private func configChanged() {
@@ -63,7 +70,7 @@ final class UsageStore {
 
     /// Polls forever. ContinuousClock counts system sleep, so after wake the pending sleep
     /// ends at once and data refreshes without a wake observer.
-    // ponytail: one fixed interval for all connectors; per-connector cadence if one gets rate-limited.
+    // Rate-limited endpoints pace themselves through QuotaCache, so this loop can stay one fixed interval.
     func run() async {
         while !Task.isCancelled {
             await refresh()

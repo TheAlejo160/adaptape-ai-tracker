@@ -1,8 +1,8 @@
 # AdaptaPE AI Tracker
 
-Widget nativo para la barra de menú de macOS que muestra, de un vistazo, cuánto te queda de cada IA que usas: límites de sesión (5 h) y semanales de Claude, ChatGPT/Codex, Cursor, GitHub Copilot, OpenCode y modelos locales como Ollama o LM Studio.
+Widget nativo para la barra de menú de macOS que muestra, de un vistazo, cuánto te queda de cada IA que usas: límites de sesión (5 h) y semanales de Claude y ChatGPT/Codex, cuotas por ventana y modelo de Gemini, Cursor, GitHub Copilot, OpenCode y modelos locales como Ollama o LM Studio.
 
-Arranca solo al encender el Mac, vive en segundo plano y en reposo usa **0 % de CPU y ~25 MB de RAM**.
+Arranca al iniciar sesión y vive en segundo plano. El sondeo usa caché y respeta los plazos de espera del proveedor.
 
 <p align="center">
   <img src="docs/screenshots/panel-light.png" width="300" alt="Panel en modo claro con barras de uso por proveedor">
@@ -15,9 +15,10 @@ Arranca solo al encender el Mac, vive en segundo plano y en reposo usa **0 % de 
 ## Qué muestra
 
 - **En la barra de menú:** el porcentaje más alto entre todas tus IAs (`72%`). El icono cambia a advertencia desde el 85 %.
-- **Por proveedor:** una barra por ventana de límite (sesión 5 h, semanal, requests premium…), en verde, naranja o rojo, con un ⚠ en estado crítico para no depender solo del color, y la cuenta atrás hasta el reinicio.
+- **Por proveedor:** todas las barras visibles sin expandir: primero sesión de 5 h, después semanal y otros periodos (mensual, requests premium…), en verde, naranja o rojo, con un ⚠ en estado crítico para no depender solo del color, y la cuenta atrás hasta el reinicio.
 - **Actividad:** un punto que pulsa mientras la herramienta está trabajando; rojo si llegaste al límite; atenuado si no hay conexión.
-- **Sesiones activas:** al expandir una fila (Claude Code, Codex, OpenCode) ves las sesiones abiertas y cuánto llevan.
+- **Sesiones activas:** al expandir una fila (Claude Code, Codex, Gemini CLI, Antigravity, OpenCode) ves las conversaciones modificadas recientemente. Es una estimación por actividad local, no una comprobación de procesos abiertos.
+- **Plan y modelos:** muestra el plan que comunica el proveedor y el último modelo registrado por Claude Code, Codex, Gemini CLI u OpenCode. La sección **Modelos** aparece cuando la fuente enumera modelos de la cuenta; por ahora Gemini, a partir de sus cuotas. Un modelo usado o configurado no se presenta como catálogo disponible.
 - **Modelos locales:** en lugar de límites muestra VRAM usada, modelo cargado y tokens/s.
 
 ## Requisitos
@@ -51,18 +52,19 @@ No hay que iniciar sesión en ningún sitio. La app **detecta sola** las herrami
 
 | Forma | Proveedores | Cómo funciona |
 |---|---|---|
-| **Automática** | ChatGPT (Codex), Cursor, GitHub Copilot, OpenCode, Ollama, LM Studio | Si la herramienta está instalada y con sesión iniciada, aparece sola con un ✓. Si no, queda oculta. No haces nada. |
-| **Con permiso del Llavero** | Claude (Claude Code) | El token vive en el Llavero; actívalo con el interruptor y macOS pedirá permiso una vez. |
+| **Automática** | ChatGPT (Codex), Claude (registro local), Gemini CLI (archivo local), Antigravity (`agy /quota`), Cursor, GitHub Copilot, OpenCode, Ollama, LM Studio | Lee la configuración local existente. Si no hay instalación ni datos de la herramienta, queda oculta. |
+| **Con permiso del Llavero** | Claude (Claude Code), Antigravity (respaldo por token de `agy`, dentro de Gemini) | Activa la lectura en Cuentas. macOS puede pedir permiso; el sondeo automático no muestra avisos. Las sesiones locales y los registros disponibles de Claude y Gemini siguen visibles con el interruptor apagado. |
 | **Variable de entorno** | OpenRouter y proveedores personalizados | La clave API se lee de una variable de entorno (p. ej. `OPENROUTER_API_KEY`). La app nunca la guarda ni te la pide por pantalla. |
 
-> Si tienes ChatGPT/Codex o Claude Code ya activos, la app se conecta sola al arrancar: toma el mismo token que esas herramientas ya dejaron en tu Mac. Si el de Claude está caducado, la fila lo dice; ejecuta `claude` una vez y se renueva.
+> ChatGPT/Codex se detecta automáticamente. Para consultar la API de Claude Code, permite la lectura del Llavero en Cuentas; después la app toma el token que la herramienta ya dejó en este Mac. El registro local disponible puede verse sin ese permiso. Si el de Claude está caducado, la fila lo dice; ejecuta `claude` una vez y se renueva.
 
 ### De dónde sale cada dato
 
 | Proveedor | Fuente local | A qué endpoint consulta |
 |---|---|---|
-| Claude | Token de Claude Code en el Llavero (`Claude Code-credentials`); sesiones en `~/.claude/projects` | `api.anthropic.com/api/oauth/usage` |
+| Claude | Token de Claude Code en el Llavero (`Claude Code-credentials`); sesiones en `~/.claude/projects`; respaldo de solo lectura de `Claude/plan-usage-history.json` y del registro de LimitBar si existe | `api.anthropic.com/api/oauth/usage` |
 | ChatGPT | `~/.codex/auth.json`; si falla, el último registro de `~/.codex/sessions` | `chatgpt.com/backend-api/wham/usage` |
+| Gemini | Primero `agy -p /quota --output-format json --print-timeout 30s`, aislado, con salida acotada y caché de 5 min. Respaldo: token de `agy` en el llavero (servicio `gemini`, cuenta `antigravity`, lectura opcional desde Cuentas mediante Security.framework, sin interacción durante el sondeo) o, si no, OAuth de `~/.gemini/oauth_creds.json`; chats en `~/.gemini/tmp/*/chats/*.jsonl`; conversaciones de Antigravity en `~/.gemini/antigravity-cli/` y `~/.gemini/antigravity/` | La CLI gestiona su conexión. Respaldo con token de `agy`: POST `daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` (plan opcional), `:retrieveUserQuotaSummary` (ventanas) y, como respaldo, `:fetchAvailableModels`. Con Gemini CLI: POST `cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` y `:retrieveUserQuota` |
 | Cursor | Sesión en `state.vscdb` (solo lectura) | `cursor.com/api/usage-summary` |
 | GitHub Copilot | Token de `gh` | `api.github.com/copilot_internal/user` |
 | OpenCode | `~/.local/share/opencode/opencode.db` (solo lectura) | — (solo local: sesiones, tokens y costo de hoy) |
@@ -71,6 +73,34 @@ No hay que iniciar sesión en ningún sitio. La app **detecta sola** las herrami
 | LM Studio | `lms ps --json` | `127.0.0.1:1234/api/v0/models` |
 
 Los datos se actualizan cada 2 minutos, al abrir el panel si tienen más de 1 minuto, y justo después de que el Mac despierta. El token se lee en cada actualización y se usa solo en memoria.
+
+Claude y Gemini limitan sus consultas de cuota a una cada 5 minutos, también después de errores 401, 403 o fallos de red. Los errores 429 conservan la última cuota y aplican esperas crecientes, respetando `Retry-After`. El plazo y el contador de 429 se conservan al reiniciar; no se guardan tokens, cuentas ni cuotas en esas preferencias. Las sesiones locales se reconstruyen aunque las credenciales estén dañadas o la consulta falle.
+
+Gemini muestra las ventanas que informa la fuente: 5 h y semanal por grupo con `agy`, o diaria por modelo con Gemini CLI. Si solo se obtiene una cuota por modelo sin periodo, no se inventa su duración. Un 403 al consultar el plan no impide consultar la cuota por separado. No equivale a la suscripción de la web de Gemini. Si `agy` está instalado, se consulta su orden `/quota` primero: la propia CLI interpreta las cuotas y puede gestionar su sesión, sin que el tracker implemente la renovación. Puede estar cerrada. La fila muestra las ventanas recibidas por grupo; el plan solo aparece si la fuente lo informa. En el respaldo por token, la credencial de `agy` dura 1 h; si la CLI no logra renovar su sesión, abre `agy` (o `gemini`, si usas Gemini CLI). El tracker no renueva tokens directamente. La ejecución de `/quota` permite a `agy` escribir únicamente su propio estado, Llavero y una carpeta temporal privada; los hooks y programas externos quedan bloqueados.
+
+Codex conserva una cuota de API conocida cuando falla la red. Si nunca obtuvo una, puede usar uno de los tres registros más recientes, solo con un evento de cuota de menos de 10 minutos y posterior al archivo de credenciales actual. Lo etiqueta como registro local con cuenta sin verificar: esos eventos no identifican la cuenta. El último modelo se toma del registro más reciente o, si falta, de `~/.codex/config.toml`.
+
+Claude puede mostrar un registro de Claude Desktop o de LimitBar cuando no hay cuota de API disponible. Se etiqueta con fuente, antigüedad y «cuenta sin verificar», no sustituye una cuota de API conocida y no inventa reinicios. Los registros de más de 24 h se descartan. La app no instala hooks ni ejecuta Claude para renovar credenciales.
+
+### Cómo debería verse cada fila
+
+Cada barra muestra lo **usado** ("69 % usado") y lo que **queda** ("Quedan 31 %"). ChatGPT muestra lo restante y Claude lo usado: son el mismo dato. La marca vertical en la barra es el tiempo transcurrido de la ventana; si el relleno va por delante, gastas más rápido que el ritmo, y aparece en naranja "Al ritmo actual se agota en …".
+
+| Situación | Lo que debe mostrar la fila |
+|---|---|
+| Todo bien | Plan, "Modelo: …", todas las barras con usado/queda y reinicio, sesiones activas y catálogo al expandir |
+| Herramienta trabajando (registro escrito hace < 2 min) | "Trabajando" con punto azul |
+| Sesión abierta sin actividad (2–10 min) | "Sesión abierta" con punto verde |
+| Sin sesiones recientes | "Inactivo" |
+| 429 del proveedor | "El servidor limitó las consultas (429) · reintento en X"; conserva la última cuota con "datos de hace Y"; nunca "Sesión caducada" |
+| 403 (consulta rechazada) | "Acceso rechazado (403)" y orientación sobre permisos; no se presenta como caducidad |
+| 401 (token inválido) | "Token caducado: ejecuta «claude» / «agy» / «codex»…" con la herramienta correcta |
+| Token de `agy` caducado (pasó 1 h sin usar `agy`) | Última cuota conocida con "Token caducado: ejecuta «agy»…" |
+| Sin red | Última cuota conocida con el error y su antigüedad; las sesiones locales siguen apareciendo |
+| Un grupo de modelos agotado (p. ej. Claude en Antigravity) | Esa barra en rojo al 100 %; la fila no pasa a "Límite alcanzado" mientras otros grupos tengan cuota |
+| Herramienta no instalada | La fila no aparece |
+
+Ninguna fila debe pedir la contraseña del llavero en cada actualización. Las lecturas directas del Llavero de Claude Code y `agy` usan `SecItemCopyMatching` y un `LAContext` con interacción desactivada durante el sondeo. El llavero clásico requiere además un control de interacción limitado al proceso, serializado y restaurado al terminar la lectura; no cambia ajustes de seguridad de macOS. Solo activar su interruptor en **Cuentas** permite a ese lector mostrar el aviso de macOS. La consulta `/quota` delega en `agy` la gestión de su propia sesión. Si el acceso falla, la fila conserva las sesiones locales y explica cómo solicitar permiso. Una nueva firma ad hoc tras actualizar la app puede requerir autorización de nuevo. La comparación de referencias y la mejora posterior están en [la fusión funcional](docs/FUSION-REFERENCIAS-2026-10-22.md). El diagnóstico inicial está en [el informe anterior](docs/DIAGNOSTICO-2026-10-22.md). Las pautas de depuración están en [AGENTS.md](AGENTS.md).
 
 ### Modo demo
 
@@ -109,11 +139,12 @@ Diseñada para no guardar nada y funcionar en local:
 - **La app no almacena credenciales propias.** No escribe tokens ni claves en disco, Llavero, `UserDefaults` ni logs. Solo **lee** lo que otras herramientas ya guardaron, en cada actualización, y lo usa en memoria.
 - **Sin login web.** No hay ventana de inicio de sesión ni cookies: eso evita el lío del passkey y no deja rastro.
 - Los tokens solo viajan hacia el propio proveedor, en cabeceras HTTP, con una sesión efímera (sin caché ni tarro de cookies). Si un servidor redirige a otro dominio, la petición se **corta** para que ningún token salga a un host ajeno.
-- El Llavero se abre en **solo lectura** y únicamente para el proveedor que actives (Claude). Las bases de datos de otras apps (Cursor, OpenCode) también se abren en solo lectura. La app nunca escribe en archivos de otras herramientas.
+- El Llavero se abre en **solo lectura** y únicamente para el proveedor que actives (Claude o el token de `agy` en Gemini). Las bases de datos de otras apps (Cursor, OpenCode) también se abren en solo lectura. La app no escribe directamente en archivos de otras herramientas. La excepción autorizada es `agy /quota`: la propia CLI puede actualizar su sesión y estado dentro del aislamiento descrito arriba.
 - Las claves de API (OpenRouter, personalizados) se leen de variables de entorno; nunca se piden por pantalla ni se guardan.
+- Solo se persisten preferencias, iconos y plazos/contadores de espera tras 429; las cuotas obtenidas permanecen en memoria.
 - No hay telemetría ni servidor propio. Todo ocurre en tu Mac.
 
-> **Aviso:** Claude, ChatGPT, Codex y Cursor no tienen API pública de límites. Esta app usa los mismos endpoints internos que sus propias apps, que pueden cambiar sin aviso. No está afiliada con Anthropic, OpenAI, Cursor, GitHub ni ningún otro proveedor. Úsala con tus propias cuentas.
+> **Aviso:** las consultas de cuota de Claude, ChatGPT/Codex, Gemini y Cursor usan endpoints internos que pueden cambiar sin aviso. No está afiliada con Anthropic, OpenAI, Google, Cursor, GitHub ni ningún otro proveedor. Úsala con tus propias cuentas.
 
 ## Cómo está hecho
 
@@ -130,7 +161,7 @@ Sources/AdaptaPEAITracker/
 ├── Auth/                        KeychainStore (solo lectura de ítems de otras apps)
 └── Connectors/
     ├── Connector.swift          Protocolo UsageConnector, HTTP (corte de redirección entre hosts), registro
-    ├── CLI/                     Claude, ChatGPT, Cursor, Copilot, OpenCode (lectura de credenciales locales)
+    ├── CLI/                     Claude, ChatGPT, Gemini / Antigravity, Cursor, Copilot, OpenCode
     ├── LocalConnectors.swift    Ollama, LM Studio
     ├── OpenRouterConnector.swift
     ├── CustomConnector.swift    Proveedores definidos en providers.json
@@ -165,7 +196,8 @@ Si `fetch()` devuelve `nil`, el proveedor se oculta. Si lanza un error, el panel
 
 ## Créditos
 
-- Lógica de lectura de límites inspirada en [vzandli/GaugeZ](https://github.com/vzandli/GaugeZ) y [dancik/limitbar](https://github.com/dancik/limitbar).
+- Lectores y patrones de cuotas inspirados en [vzandli/GaugeZ](https://github.com/vzandli/GaugeZ) y [dancik/limitbar](https://github.com/dancik/limitbar).
+- El aislamiento de `agy /quota` adapta el perfil de LimitBar. Su [licencia MIT](docs/LICENSE-LimitBar.txt) acompaña al bundle.
 - Iconos: [lobe-icons](https://github.com/lobehub/lobe-icons) (MIT) y [simple-icons](https://github.com/simple-icons/simple-icons) (CC0). Las marcas pertenecen a sus dueños.
 
 ## Licencia

@@ -11,6 +11,7 @@ extension Activity {
         switch self {
         case .idle: "Inactivo"
         case .processing(let task): task ?? "Procesando…"
+        case .waiting: "Sesión abierta"
         case .rateLimited: "Límite alcanzado"
         case .offline: "Sin conexión"
         }
@@ -41,6 +42,8 @@ struct ActivityIndicator: View {
                     .opacity(on ? 1 : 0.4)
                     .background(Circle().stroke(.blue, lineWidth: 1).scaleEffect(on ? 1.8 : 1).opacity(on ? 0 : 0.6))
             } animation: { _ in .easeInOut(duration: 1.2) }
+        case .waiting:
+            Circle().fill(.green)
         case .rateLimited:
             Circle().fill(.red)
         case .offline:

@@ -37,7 +37,7 @@ struct OpenCodeConnector: UsageConnector {
             usage.activity = .processing(task: latest["title"])
         }
         // `model` is stored as JSON ({"id":…,"providerID":…}) in recent OpenCode versions, plain text in older ones.
-        usage.plan = totals?["latest_model"].map { raw in
+        usage.recentModel = totals?["latest_model"].map { raw in
             (try? JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any])?["id"] as? String ?? raw
         }
         let tokens = totals?["tokens"].flatMap(Double.init) ?? 0
