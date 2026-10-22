@@ -1,17 +1,20 @@
 import Foundation
 
+/// Claude account usage. Reads the OAuth token Claude Code already stored in the Keychain — the
+/// same quota the web account uses — so there is no separate login. Active Claude Code sessions
+/// appear under this row.
 struct ClaudeCodeConnector: UsageConnector {
-    let info = ProviderInfo(id: "claude-code", name: "Claude Code", kind: .codeAssistant,
-                            iconURL: ProviderInfo.lobeIcon("claudecode"), auth: .keychainConsent)
+    let info = ProviderInfo(id: "claude", name: "Claude", kind: .cloud,
+                            iconURL: ProviderInfo.lobeIcon("claude"), auth: .keychainConsent)
 
     nonisolated func fetch() async throws -> ProviderUsage? {
         guard let data = KeychainStore.readForeign(service: "Claude Code-credentials") else { return nil }
         let credentials = try LocalFiles.json(data)["claudeAiOauth"] as? [String: Any]
         guard let credentials, let token = credentials["accessToken"] as? String, !token.isEmpty else {
-            throw ConnectorError.unauthorized
+            throw ConnectorError.expired(hint: "ejecuta «claude» una vez para renovar la sesión")
         }
         if let expiry = LocalFiles.number(credentials["expiresAt"]), expiry / 1000 < Date().timeIntervalSince1970 {
-            throw ConnectorError.unauthorized
+            throw ConnectorError.expired(hint: "ejecuta «claude» una vez para renovar la sesión")
         }
         let plan = (credentials["subscriptionType"] as? String)?.capitalized
         let response = try await HTTP.get(URL(string: "https://api.anthropic.com/api/oauth/usage")!, headers: [

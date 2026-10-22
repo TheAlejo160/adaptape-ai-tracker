@@ -100,14 +100,12 @@ enum LocalFiles {
     static func ghToken() async -> String? {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
-                let binary = ["/opt/homebrew/bin/gh", "/usr/local/bin/gh"].first {
+                // Only fixed install paths — never resolve `gh` through PATH, which an attacker could poison.
+                guard let binary = ["/opt/homebrew/bin/gh", "/usr/local/bin/gh"].first(where: {
                     FileManager.default.isExecutableFile(atPath: $0)
-                }
+                }) else { continuation.resume(returning: nil); return }
                 continuation.resume(returning: processToken(
-                    executable: binary ?? "/usr/bin/env",
-                    arguments: binary == nil ? ["gh", "auth", "token", "--hostname", "github.com"]
-                        : ["auth", "token", "--hostname", "github.com"]
-                ))
+                    executable: binary, arguments: ["auth", "token", "--hostname", "github.com"]))
             }
         }
     }
@@ -128,6 +126,8 @@ enum LocalFiles {
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         process.currentDirectoryURL = URL(fileURLWithPath: "/")
+        // Minimal environment: don't leak our own env (which may hold API keys) to the child.
+        process.environment = ["HOME": NSHomeDirectory(), "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice

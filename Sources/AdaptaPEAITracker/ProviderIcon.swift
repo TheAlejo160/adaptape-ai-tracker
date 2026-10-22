@@ -8,9 +8,12 @@ actor IconCache {
     private let diskDirectory: URL?
 
     init() {
-        let config = URLSessionConfiguration.default
+        // Ephemeral: no persistent cookies, credentials or URL cache. Icons are CDN assets with no
+        // secrets, so CDN redirects are allowed; our own disk cache below holds the decoded SVG.
+        let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 10
         config.timeoutIntervalForResource = 10
+        config.httpShouldSetCookies = false
         self.session = URLSession(configuration: config)
         let dir = URL.cachesDirectory.appending(path: "com.thealejo.adaptapeaitracker/icons")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

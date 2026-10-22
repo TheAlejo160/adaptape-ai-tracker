@@ -10,12 +10,15 @@ protocol UsageConnector: Sendable {
 
 enum ConnectorError: LocalizedError {
     case unauthorized
+    /// Token expired; `hint` tells the user which tool to run to refresh it.
+    case expired(hint: String)
     case http(Int)
     case unexpectedResponse(String)
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Sesión caducada: vuelve a conectar la cuenta"
+        case .unauthorized: "Sesión caducada: vuelve a usar la herramienta para renovarla"
+        case .expired(let hint): "Token caducado: \(hint)"
         case .http(let code): "El servidor respondió \(code)"
         case .unexpectedResponse(let what): "Respuesta inesperada (\(what))"
         }
@@ -25,9 +28,13 @@ enum ConnectorError: LocalizedError {
 /// Shared HTTP for connectors: ephemeral (no cookie jar, no cache), short timeout.
 /// Tokens only travel in headers set per request and are never persisted by us.
 enum HTTP {
+    /// Usage payloads are tiny; cap the body so a hostile or broken server can't grow memory unbounded.
+    static let maxResponseBytes = 4 * 1024 * 1024
+
     static let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 30 // total deadline: a trickling server can't hold a slot open
         config.httpShouldSetCookies = false
         config.urlCache = nil
         return URLSession(configuration: config)
@@ -36,12 +43,19 @@ enum HTTP {
     static func get(_ url: URL, headers: [String: String] = [:]) async throws -> Data {
         var request = URLRequest(url: url)
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
-        let (data, response) = try await session.data(for: request, delegate: SameHostRedirects.shared)
+        let (bytes, response) = try await session.bytes(for: request, delegate: SameHostRedirects.shared)
         switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
-        case 200..<300: return data
+        case 200..<300: break
         case 401, 403: throw ConnectorError.unauthorized
         case let code: throw ConnectorError.http(code)
         }
+        var data = Data()
+        data.reserveCapacity(min(max(Int(response.expectedContentLength), 0), maxResponseBytes))
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count > maxResponseBytes { throw ConnectorError.unexpectedResponse("respuesta demasiado grande") }
+        }
+        return data
     }
 
     static func getJSON<T: Decodable>(_ type: T.Type, from url: URL, headers: [String: String] = [:]) async throws -> T {
@@ -53,7 +67,8 @@ enum HTTP {
 
 /// URLSession copies request headers onto redirects; refuse any hop to another host so a
 /// token or session cookie can never reach a server other than the one it was meant for.
-private final class SameHostRedirects: NSObject, URLSessionTaskDelegate, Sendable {
+/// Local connectors use it too, so a loopback server can't redirect the app to an external host.
+final class SameHostRedirects: NSObject, URLSessionTaskDelegate, Sendable {
     static let shared = SameHostRedirects()
 
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
@@ -96,13 +111,11 @@ enum ConnectorRegistry {
     }()
 
     private static let builtIn: [any UsageConnector] = [
-        // Cloud: signed-in web accounts or API keys.
-        ClaudeWebConnector(),
-        ChatGPTWebConnector(),
-        OpenRouterConnector(),
-        // Code assistants: reuse the credentials their own CLIs already stored.
-        ClaudeCodeConnector(),
-        CodexConnector(),
+        // Cloud accounts: read the token the brand's own tool already stored locally. No login.
+        ClaudeCodeConnector(),   // "Claude" — token from Claude Code (Keychain, opt-in)
+        CodexConnector(),        // "ChatGPT" — token from ~/.codex/auth.json
+        OpenRouterConnector(),   // key from OPENROUTER_API_KEY
+        // Code assistants with their own quota.
         CursorConnector(),
         CopilotConnector(),
         OpenCodeConnector(),

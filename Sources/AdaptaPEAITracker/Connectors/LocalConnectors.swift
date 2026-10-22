@@ -18,7 +18,7 @@ struct OllamaConnector: UsageConnector {
         var request = URLRequest(url: url)
         request.timeoutInterval = 2
 
-        guard let (data, response) = try? await HTTP.session.data(for: request),
+        guard let (data, response) = try? await HTTP.session.data(for: request, delegate: SameHostRedirects.shared),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let res = try? JSONDecoder().decode(OllamaResponse.self, from: data) else { return nil }
 
@@ -56,7 +56,7 @@ struct LMStudioConnector: UsageConnector {
         var request = URLRequest(url: url)
         request.timeoutInterval = 2
 
-        guard let (data, response) = try? await HTTP.session.data(for: request),
+        guard let (data, response) = try? await HTTP.session.data(for: request, delegate: SameHostRedirects.shared),
               (response as? HTTPURLResponse)?.statusCode == 200 else {
             let dir = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".lmstudio")
             guard FileManager.default.fileExists(atPath: dir.path) else { return nil }

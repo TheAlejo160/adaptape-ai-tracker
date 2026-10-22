@@ -79,7 +79,9 @@ struct MeterBar: View {
 /// "18 min", "2 h 18 min", "1 h 05 min", "3 d 4 h". Hand-rolled because Foundation's
 /// abbreviated Spanish styles insert commas ("2 h, 18 min").
 func compactDuration(_ seconds: TimeInterval) -> String {
-    let minutes = Int(max(seconds, 0) / 60)
+    guard seconds.isFinite else { return "—" }
+    // Cap before the Int conversion: a bogus far-future reset (e.g. 1e300 s) would otherwise trap.
+    let minutes = Int(min(max(seconds, 0), 3_153_600_000) / 60) // ≈ 100 años
     let (d, h, m) = (minutes / 1440, minutes % 1440 / 60, minutes % 60)
     if d > 0 { return h > 0 ? "\(d) d \(h) h" : "\(d) d" }
     if h > 0 { return "\(h) h " + String(format: "%02d min", m) }

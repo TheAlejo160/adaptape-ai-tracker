@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// Every connector the app knows, how it gets its data, and the switch to link or unlink it.
+/// Read-only account panel: shows how each provider is detected. Nothing is stored or typed here —
+/// the app only reads credentials other tools already saved. The one control is the macOS-consent
+/// toggle for providers whose token lives in another app's Keychain.
 struct AccountsView: View {
     let onClose: () -> Void
     @Environment(UsageStore.self) private var store
@@ -23,23 +25,9 @@ struct AccountsView: View {
                 .padding(8)
                 .onGeometryChange(for: CGFloat.self, of: \.size.height) { contentHeight = $0 }
             }
-            // Same self-sizing trick as the provider list; header + footer keep the panel under ~560.
             .frame(height: min(contentHeight, 440))
             Divider()
-            VStack(alignment: .leading, spacing: 6) {
-                Toggle("Modo demo (datos de ejemplo)", isOn: $store.demoMode)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .font(.callout)
-                Label("Los tokens se guardan solo en tu Llavero y nunca salen de este Mac salvo hacia el propio proveedor.",
-                      systemImage: "lock.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            footer($store)
         }
     }
 
@@ -59,193 +47,97 @@ struct AccountsView: View {
         .padding(.vertical, 8)
     }
 
+    private func footer(_ store: Bindable<UsageStore>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Modo demo (datos de ejemplo)", isOn: store.demoMode)
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .font(.callout)
+            Label("No se guarda ninguna credencial: la app solo lee los tokens que tus herramientas ya tienen en este Mac, los usa en memoria y los envía solo a cada proveedor. En disco guarda solo tus preferencias y la caché de iconos.",
+                  systemImage: "lock.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
     private func section(_ kind: ProviderKind, _ connectors: [any UsageConnector]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(kind.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .accessibilityAddTraits(.isHeader)
-            ForEach(connectors, id: \.info.id) { AccountRow(connector: $0) }
+            ForEach(connectors, id: \.info.id) { connector in
+                AccountRow(info: connector.info)
+            }
         }
     }
 }
 
-/// One connector: icon, name, where its data comes from, and the control to link it.
+/// One provider's connection state. `.keychainConsent` gets a toggle; the rest are informational.
 private struct AccountRow: View {
-    let connector: any UsageConnector
+    let info: ProviderInfo
     @Environment(UsageStore.self) private var store
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hovering = false
-    @State private var editingKey = false
-    @State private var keyText = ""
-    @State private var saveFailed = false
-    @State private var deleteFailed = false
-    @FocusState private var keyFocused: Bool
 
-    private var info: ProviderInfo { connector.info }
-    private var keyAccount: String { "apikey.\(info.id)" }
-    private var current: ProviderUsage? { store.providers.first { $0.id == info.id } }
-    private var isDetected: Bool { current != nil }
+    private var isDetected: Bool { store.providers.contains { $0.id == info.id } }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                ProviderIcon(url: info.iconURL, name: info.name, size: 20)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(info.name).font(.body.weight(.medium))
-                    Text(caption)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if deleteFailed {
-                        Label("No se pudo borrar del Llavero", systemImage: "exclamationmark.circle")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    }
-                    if let error = current?.error {
-                        Label(error, systemImage: "exclamationmark.circle")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 8)
-                control
+        HStack(spacing: 10) {
+            ProviderIcon(url: info.iconURL, name: info.name, size: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(info.name).font(.body)
+                Text(statusText).font(.caption).foregroundStyle(.secondary)
             }
-            if editingKey {
-                keyEditor.transition(.opacity.combined(with: .move(edge: .top)))
-            }
+            Spacer(minLength: 8)
+            trailing
         }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(hovering ? AnyShapeStyle(.fill.quaternary) : AnyShapeStyle(.clear), in: .rect(cornerRadius: 8))
-        .opacity(info.auth == .automatic && !store.demoMode && !isDetected ? 0.55 : 1)
-        .clipped()
-        .onHover { hovering = $0 }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(info.name)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .opacity(dimmed ? 0.55 : 1)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(info.name), \(statusText)")
     }
 
-    // MARK: Per-auth content
-
-    private var isConnected: Bool {
+    @ViewBuilder private var trailing: some View {
         switch info.auth {
-        case .automatic: isDetected
-        case .keychainConsent: store.isEnabled(info)
-        case .webLogin: store.isEnabled(info) && WebSession.isLinked(info.id)
-        case .apiKey: store.isEnabled(info) && KeychainStore.load(account: keyAccount) != nil
-        }
-    }
-
-    private var caption: String {
-        switch info.auth {
-        case .automatic:
-            // Demo mode shows sample data and skips detection, so "not found" would be a lie.
-            store.demoMode ? "No comprobado en modo demo"
-                : isDetected ? "Detectado automáticamente" : "No encontrado en este Mac"
-        case .keychainConsent: "Usa el token guardado por la herramienta (Llavero)"
-        case .webLogin: isConnected ? "Cuenta vinculada" : "Vincula tu cuenta iniciando sesión"
-        case .apiKey: isConnected ? "Clave API guardada en el Llavero" : "Con tu clave API oficial"
-        }
-    }
-
-    @ViewBuilder private var control: some View {
-        switch info.auth {
-        case .automatic:
-            EmptyView()
         case .keychainConsent:
-            Toggle("Usar \(info.name)", isOn: Binding(
+            Toggle("", isOn: Binding(
                 get: { store.isEnabled(info) },
                 set: { store.setEnabled($0, id: info.id) }
             ))
             .labelsHidden()
             .toggleStyle(.switch)
             .controlSize(.mini)
-            .help("macOS pedirá permiso para leer el token que guardó la herramienta")
-        case .webLogin, .apiKey:
-            if isConnected {
-                Button("Desconectar", action: disconnect)
-                    .controlSize(.small)
-                    .accessibilityLabel("Desconectar \(info.name)")
-            } else {
-                Button(editingKey ? "Cancelar" : "Conectar", action: connect)
-                    .controlSize(.small)
-                    .buttonStyle(.borderedProminent)
-                    .tint(editingKey ? Color.secondary : Color.accentColor)
-                    .accessibilityLabel(editingKey ? "Cancelar" : "Conectar \(info.name)")
-            }
-        }
-    }
-
-    private var keyEditor: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                SecureField("Pega tu clave API", text: $keyText)
-                    .textFieldStyle(.roundedBorder)
-                    .controlSize(.small)
-                    .focused($keyFocused)
-                    .onSubmit(saveKey)
-                    .accessibilityLabel("Clave API de \(info.name)")
-                Button("Guardar", action: saveKey)
-                    .controlSize(.small)
-                    .disabled(trimmedKey.isEmpty)
-                    .accessibilityLabel("Guardar clave de \(info.name)")
-            }
-            if saveFailed {
-                Text("No se pudo guardar en el Llavero").font(.caption).foregroundStyle(.orange)
-            }
-        }
-        .onAppear { keyFocused = true }
-    }
-
-    // MARK: Actions
-
-    private var trimmedKey: String { keyText.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-    private func connect() {
-        switch info.auth {
-        case .webLogin:
-            guard let connector = connector as? any WebLoginConnector else { return }
-            let store = store
-            let id = info.id
-            deleteFailed = false
-            WebLogin.present(for: connector) { ok in
-                if ok { store.setEnabled(true, id: id) }
-            }
-        case .apiKey:
-            withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15)) {
-                editingKey.toggle()
-            }
-            keyText = ""
-            saveFailed = false
-            deleteFailed = false
+            .help("macOS pedirá permiso para leer el token del Llavero")
+        case .automatic where isDetected, .apiKeyEnv where isDetected:
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                .accessibilityHidden(true)
         default:
-            break
+            EmptyView()
         }
     }
 
-    private func saveKey() {
-        guard !trimmedKey.isEmpty else { return }
-        do {
-            try KeychainStore.save(Data(trimmedKey.utf8), account: keyAccount)
-        } catch {
-            saveFailed = true
-            return
+    private var dimmed: Bool {
+        switch info.auth {
+        case .keychainConsent: !store.isEnabled(info)
+        default: !isDetected && !store.demoMode
         }
-        keyText = ""
-        withAnimation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15)) {
-            editingKey = false
-        }
-        store.setEnabled(true, id: info.id)
     }
 
-    private func disconnect() {
-        let deleted = if case .webLogin = info.auth { WebSession.unlink(info.id) } else { KeychainStore.delete(account: keyAccount) }
-        // A secret left in the Keychain would quietly reconnect later: stay connected and say so.
-        deleteFailed = !deleted
-        guard deleted else { return }
-        store.setEnabled(false, id: info.id)
+    private var statusText: String {
+        if store.demoMode { return "No comprobado en modo demo" }
+        switch info.auth {
+        case .automatic:
+            return isDetected ? "Detectado automáticamente" : "No encontrado en este Mac"
+        case .keychainConsent:
+            return store.isEnabled(info)
+                ? (isDetected ? "Conectado (token del Llavero)" : "Activado; esperando permiso del Llavero")
+                : "Activa para leer el token del Llavero"
+        case .apiKeyEnv(let variable):
+            return isDetected ? "Detectado (variable \(variable))" : "Define la variable \(variable)"
+        }
     }
 }

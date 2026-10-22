@@ -43,8 +43,10 @@ final class UsageStore {
     /// Highest used fraction across all quota windows, for the menu bar label.
     var peakUsage: Double? { providers.compactMap(\.peakUsage).max() }
 
+    /// Only Keychain-consent providers need opting in (macOS prompts). Everything else self-detects:
+    /// fetch() returns nil when the local source or env var is absent, so the row simply stays hidden.
     func isEnabled(_ info: ProviderInfo) -> Bool {
-        info.auth == .automatic || enabledIDs.contains(info.id)
+        info.auth == .keychainConsent ? enabledIDs.contains(info.id) : true
     }
 
     func setEnabled(_ enabled: Bool, id: String) {

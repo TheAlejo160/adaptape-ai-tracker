@@ -1,11 +1,13 @@
 import Foundation
 
-/// OpenRouter credit via the official key endpoint. The key is pasted by the user in Cuentas.
+/// OpenRouter credit via the official key endpoint. The key is read from the OPENROUTER_API_KEY
+/// environment variable; the app never stores it.
 struct OpenRouterConnector: UsageConnector {
+    static let envVar = "OPENROUTER_API_KEY"
     let info = ProviderInfo(
         id: "openrouter", name: "OpenRouter", kind: .cloud,
         iconURL: ProviderInfo.lobeIcon("openrouter"),
-        auth: .apiKey
+        auth: .apiKeyEnv(envVar)
     )
 
     private struct KeyInfo: Decodable {
@@ -25,8 +27,7 @@ struct OpenRouterConnector: UsageConnector {
     }
 
     func fetch() async throws -> ProviderUsage? {
-        guard let stored = KeychainStore.load(account: "apikey.\(info.id)"),
-              let key = String(data: stored, encoding: .utf8), !key.isEmpty else { return nil }
+        guard let key = ProcessInfo.processInfo.environment[Self.envVar], !key.isEmpty else { return nil }
 
         let details = try await HTTP.getJSON(KeyInfo.self,
                                              from: URL(string: "https://openrouter.ai/api/v1/key")!,

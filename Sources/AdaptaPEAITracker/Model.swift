@@ -14,16 +14,15 @@ enum ProviderKind: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// How a connector gets its credentials. Anything but `.automatic` needs the user to opt in.
+/// How a connector finds its credentials. The app never stores anything of its own: it only
+/// reads what other tools already saved on this Mac, and holds tokens in memory for one fetch.
 enum AuthMethod: Equatable, Sendable {
     /// Local server or a plain file the user's own CLI wrote. Read without asking.
     case automatic
-    /// Reads another app's Keychain item; macOS shows its own access prompt.
+    /// Reads another app's Keychain item; macOS shows its own access prompt. Opt-in.
     case keychainConsent
-    /// User signs in once in an embedded web view; session cookies live in our Keychain.
-    case webLogin(URL)
-    /// User pastes an official API key; stored in our Keychain.
-    case apiKey
+    /// Reads an API key from this environment variable. Nothing is stored by the app.
+    case apiKeyEnv(String)
 }
 
 /// Static description of a provider, known before any fetch.

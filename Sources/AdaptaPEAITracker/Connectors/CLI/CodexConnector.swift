@@ -1,8 +1,11 @@
 import Foundation
 
+/// ChatGPT account usage. Reads the OAuth token Codex already stored in ~/.codex/auth.json — the
+/// same quota the ChatGPT app uses — so there is no separate login. Falls back to the local
+/// session log when the endpoint is unreachable. Active Codex sessions appear under this row.
 struct CodexConnector: UsageConnector {
-    let info = ProviderInfo(id: "codex", name: "Codex", kind: .codeAssistant,
-                            iconURL: ProviderInfo.lobeIcon("codex"))
+    let info = ProviderInfo(id: "chatgpt", name: "ChatGPT", kind: .cloud,
+                            iconURL: ProviderInfo.lobeIcon("openai"))
 
     nonisolated func fetch() async throws -> ProviderUsage? {
         let auth = LocalFiles.home(".codex/auth.json")

@@ -5,10 +5,7 @@
     "kind": "cloud",
     "icon": "deepseek",
     "url": "https://api.deepseek.com/user/balance",
-    "headers": {
-      "Authorization": "Bearer {{apikey}}",
-      "Accept": "application/json"
-    },
+    "headers": { "Authorization": "Bearer {{env:DEEPSEEK_API_KEY}}", "Accept": "application/json" },
     "summary": "Saldo: {balance_infos.0.total_balance} {balance_infos.0.currency}"
   },
   {
@@ -17,9 +14,7 @@
     "kind": "cloud",
     "icon": "kimi",
     "url": "https://api.moonshot.ai/v1/users/me/balance",
-    "headers": {
-      "Authorization": "Bearer {{apikey}}"
-    },
+    "headers": { "Authorization": "Bearer {{env:MOONSHOT_API_KEY}}" },
     "summary": "Saldo: {data.available_balance} US$"
   },
   {
@@ -28,9 +23,7 @@
     "kind": "cloud",
     "icon": "openrouter",
     "url": "https://openrouter.ai/api/v1/credits",
-    "headers": {
-      "Authorization": "Bearer {{apikey}}"
-    },
+    "headers": { "Authorization": "Bearer {{env:OPENROUTER_API_KEY}}" },
     "windows": [
       {
         "label": "Créditos usados",

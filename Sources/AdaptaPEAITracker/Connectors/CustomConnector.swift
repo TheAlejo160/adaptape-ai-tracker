@@ -49,26 +49,28 @@ struct CustomConnector: UsageConnector {
     init(config: ProviderConfig) {
         self.config = config
         let icon = config.icon.flatMap { $0.contains("://") ? URL(string: $0) : ProviderInfo.lobeIcon($0) }
-        let needsKey = config.headers?.values.contains { $0.contains("{{apikey}}") } ?? false
+        // A key goes in an env var ({{env:NAME}}); the app stores nothing.
+        let envVar = config.headers?.values
+            .compactMap { $0.firstMatch(of: /\{\{env:([A-Za-z0-9_]+)\}\}/).map { String($0.1) } }.first
         info = ProviderInfo(
             id: config.id,
             name: config.name,
             kind: ProviderKind(rawValue: config.kind) ?? .cloud,
             iconURL: icon,
-            auth: needsKey ? .apiKey : .automatic
+            auth: envVar.map { .apiKeyEnv($0) } ?? .automatic
         )
     }
 
     func fetch() async throws -> ProviderUsage? {
         var headers: [String: String] = [:]
         for (field, template) in config.headers ?? [:] {
-            var value = template
-            if value.contains("{{apikey}}") {
-                guard let key = KeychainStore.load(account: "apikey.\(config.id)").flatMap({ String(data: $0, encoding: .utf8) }),
-                      !key.isEmpty else { return nil }
-                value = value.replacingOccurrences(of: "{{apikey}}", with: key)
+            var missing = false
+            // {{env:NAME}} → environment variable; empty if unset (then the provider stays hidden).
+            let value = template.replacing(/\{\{env:([A-Za-z0-9_]+)\}\}/) {
+                guard let v = ProcessInfo.processInfo.environment[String($0.1)], !v.isEmpty else { missing = true; return "" }
+                return v
             }
-            value = value.replacing(/\{\{env:([A-Za-z0-9_]+)\}\}/) { ProcessInfo.processInfo.environment[String($0.1)] ?? "" }
+            if missing { return nil }
             headers[field] = value
         }
         guard let url = URL(string: config.url) else { throw ConnectorError.unexpectedResponse("url") }
